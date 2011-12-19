@@ -81,6 +81,7 @@ class PunisherDaemon(Daemon):
         super(PunisherDaemon, self).__init__(pid_path, *args, **kwargs)
 
     def run(self, punisher, *args, **kwargs):
+        os.nice(20)
         self._punisher = punisher
         self._punisher.start(*args, **kwargs)
         self._punisher.wait()
