@@ -1,105 +1,145 @@
-#!/usr/bin/env python2.6
+# coding=utf-8
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-import ConfigParser
-import cPickle
+from argparse import ArgumentParser
+from threading import Event, Thread
 import datetime
 import os
+import pickle
 import random
 import sys
-import threading
+import time
 
-from punisher.punishments import PUNISHMENTS, safety
-import punisher.utils
+from foxxy.daemon import Daemon
 
-SETTINGS_DIR_PATH = punisher.utils.abspath(__file__, 'settings')
+from punisher.punishments import PUNISHMENTS
 
-class PunisherError(Exception):
-    pass
-
-
-class User(object):
-    def __init__(self, username, settings_dir_path=None):
-        if settings_dir_path is None:
-            settings_dir_path = SETTINGS_DIR_PATH
-        self.username = username
-        self._settings_path = os.path.join(settings_dir_path, self.username)
-
-    def settings_new(self):
-        self.settings = {}
-        
-    def settings_load(self):
-        with open(self._settings_path) as settings_file:
-            self.settings = cPickle.load(settings_file)
-
-    def settings_save(self):
-        with open(self._settings_path, 'w') as settings_file:
-            cPickle.dump(self.settings, settings_file) 
-
-    def settings_delete(self):
-        os.remove(self._settings_path)
-    
+# Ensure the config directory exists.
+_CONFIG_DIR = os.path.expanduser('~/.punisher')
+if not os.path.isdir(_CONFIG_DIR):
+    os.mkdir(_CONFIG_DIR, 0700)
 
 class Punisher(object):
-    safe_mode = True
-    
-    def __init__(self, user, punishments=None):        
-        if isinstance(user, str):
-            self.user = User(user)
-            try:
-                self.user.settings_load()
-            except IOError:
-                self.user.settings_new()
-        elif isinstance(user, User):
-            self.user = user
-        else:
-            raise ValueError('user must either of type str or User')
+    def __init__(self, punishments=None, safe_mode=True):
+        self._punishments = \
+                punishments if punishments is not None else PUNISHMENTS
+        self.safe_mode = safe_mode
+        self._dont_punish = Event()
 
-        if punishments is None:
-            punishments = PUNISHMENTS
-        
-        self._punishments = set()
-        for punishment_class in punishments:
+    def _punish(self):
+        punishment = random.choice(self._punishments)
+        if self.safe_mode:
+            print('[SAFE MODE] %s' % punishment, file=sys.stderr)
+            return
+        punishment.punish()
+
+    def _wait(self, punish_in):
+        if not self._dont_punish.wait(punish_in):
+            self._punish()
+
+    def configure(self, names=None):
+        config_path = os.path.join(_CONFIG_DIR, 'config')
+        if os.path.isfile(config_path):
+            with open(config_path) as config_file:
+                config = pickle.load(config_file)
+        else:
+            config = {}
+        punishments = set()
+        for punishment_class in self._punishments:
+            if names is not None and punishment_class.__name__ not in names:
+                continue
             punishment = punishment_class(self)
             if punishment.requires_configuration:
-                fullname = '%s.%s' % (punishment_class.__module__, 
-                    punishment_class.__name__)                
-                if fullname not in self.user.settings:
-                    self.user.settings[fullname] = {}
-                punishment.configure(self.user.settings[fullname])
+                fullname = '%s.%s' % (punishment_class.__module__,
+                    punishment_class.__name__)
+                punishment.configure(config.setdefault(fullname, {}))
             if punishment.enabled:
-                self._punishments.add(punishment)
-        self._punishments = tuple(self._punishments)
+                punishments.add(punishment)
+        self._punishments = tuple(punishments)
         if not self._punishments:
             raise PunisherError('no punishments')
         print('Punishments loaded: %s' % ' '.join(map(str, self._punishments)))
-    
-    def activate(self, punish_datetime, password):
-        self._password = password
-        self.punish_datetime = punish_datetime
-        t = punish_datetime - datetime.datetime.now()
-        seconds = (t.microseconds + (t.seconds + t.days * 24 * 3600) * 10**6) \
-            / 10**6
-        self._timer = threading.Timer(seconds, self.punish)
+        with open(config_path, 'w') as config_file:
+            pickle.dump(config, config_file)
+
+    def start(self, punish_in):
+        self._timer = Thread(target=self._wait, args=(punish_in,))
         self._timer.start()
-    
-    def deactivate(self, password):
-        if password != self._password:
-            raise PunisherError('password incorrect')
-        self._timer.cancel()
-        
-    def punish(self):
-        punishment = random.choice(self._punishments)
-        if self.safe_mode:
-            print('Safe mode is suppressing %s punishment' % punishment)
+
+    def stop(self):
+        self._dont_punish.set()
+
+    def wait(self):
+        while self._timer.is_alive():
+            self._timer.join(1)
+
+
+class PunisherDaemon(Daemon):
+    def __init__(self, *args, **kwargs):
+        pid_path = os.path.join(_CONFIG_DIR, 'pid')
+        super(PunisherDaemon, self).__init__(pid_path, *args, **kwargs)
+
+    def run(self, punisher, *args, **kwargs):
+        self._punisher = punisher
+        self._punisher.start(*args, **kwargs)
+        self._punisher.wait()
+
+    def on_stop(self):
+        self._punisher.stop()
+
+
+def compute_time(time_str):
+    offset = time_str.startswith('+')
+    if offset:
+        time_str = time_str[1:]
+    time = datetime.datetime.strptime(time_str, '%H:%M:%S').time()
+    if offset:
+        return datetime.timedelta(hours=time.hour, minutes=time.minute,
+                                  seconds=time.second).total_seconds()
+    else:
+        today = datetime.datetime.today()
+        now = today.time()
+        if time <= now:
+            date = (today + datetime.timedelta(days=1)).date()
         else:
-            punishment.punish()
-        
-        
+            date = today
+        time = datetime.datetime.combine(date, time)
+        return (time - today).total_seconds()
+
+def build_argument_parser():
+    argument_parser = ArgumentParser()
+    subparser = argument_parser.add_subparsers(dest='command')
+    start = subparser.add_parser('start')
+    start.add_argument('-a', '--arm', action='store_false', default=True,
+                       dest='safe_mode')
+    start.add_argument('-p', '--punishments')
+    start.add_argument('time')
+    stop = subparser.add_parser('stop')
+    return argument_parser
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv
+    argument_parser = build_argument_parser()
+    args = argument_parser.parse_args(args=argv[1:])
+
+    punisher_daemon = PunisherDaemon()
+
+    command = args.command
+    if command == 'start':
+        punisher = Punisher(safe_mode=args.safe_mode)
+        if args.punishments:
+            punishments = args.punishments.split(':')
+        else:
+            punishments = None
+        punisher.configure(names=punishments)
+        punisher_daemon.start(punisher, compute_time(args.time))
+    elif command == 'stop':
+        punisher_daemon.stop()
+
     return 0
 
 if __name__ == '__main__':
     exit(main())
+
