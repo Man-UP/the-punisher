@@ -4,6 +4,7 @@ set -o nounset
 
 sudo apt-get --assume-yes install \
     git \
+    python-dev \
     python-setuptools
 
 # libfoxxy
