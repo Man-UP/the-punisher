@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from argparse import ArgumentParser
+from getpass import getuser
 from threading import Event, Thread
 import datetime
 import os
@@ -12,6 +13,7 @@ import sys
 import time
 
 from foxxy.daemon import Daemon
+from pyutmp import UtmpFile
 
 from punisher.punishments import PUNISHMENTS
 
@@ -90,6 +92,13 @@ class PunisherDaemon(Daemon):
         self._punisher.stop()
 
 
+def is_remote_user():
+    tty = os.ttyname(sys.stdin.fileno())
+    for utmp in UtmpFile():
+        if utmp.ut_user_process and utmp.ut_line == tty:
+            return bool(utmp.ut_addr)
+    raise ValueError('could not find tty')
+
 def compute_time(time_str):
     offset = time_str.startswith('+')
     if offset:
@@ -137,7 +146,10 @@ def main(argv=None):
         punisher.configure(names=punishments)
         punisher_daemon.start(punisher, compute_time(args.time))
     elif command == 'stop':
-        punisher_daemon.stop()
+        if is_remote_user():
+            print('Get up out of bed and turn me off in person.')
+        else:
+            punisher_daemon.stop()
 
     return 0
 
