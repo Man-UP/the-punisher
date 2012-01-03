@@ -120,6 +120,7 @@ def compute_time(time_str):
 def build_argument_parser():
     argument_parser = ArgumentParser()
     subparser = argument_parser.add_subparsers(dest='command')
+    subparser.add_parser('status')
     start = subparser.add_parser('start')
     start.add_argument('-a', '--arm', action='store_false', default=True,
                        dest='safe_mode')
@@ -137,7 +138,10 @@ def main(argv=None):
     punisher_daemon = PunisherDaemon()
 
     command = args.command
-    if command == 'start':
+    if command == 'status':
+        print('The punisher %s running' 
+                % ('IS' if punisher_daemon.is_running() else 'IS NOT'))
+    elif command == 'start':
         punisher = Punisher(safe_mode=args.safe_mode)
         if args.punishments:
             punishments = args.punishments.split(':')
