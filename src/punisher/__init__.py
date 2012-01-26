@@ -31,10 +31,8 @@ class Punisher(object):
 
     def _punish(self):
         punishment = random.choice(self._punishments)
-        if self.safe_mode:
-            print('[SAFE MODE] %s' % punishment, file=sys.stderr)
-            return
-        punishment.punish()
+        if not self.safe_mode:
+            punishment.punish()
         self._cleanup()
 
     def _cleanup(self):
