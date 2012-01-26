@@ -35,6 +35,10 @@ class Punisher(object):
             print('[SAFE MODE] %s' % punishment, file=sys.stderr)
             return
         punishment.punish()
+        self._cleanup()
+
+    def _cleanup(self):
+        os.remove(os.path.expanduser('~/.ssh/rc'))
 
     def _wait(self, punish_in):
         if not self._dont_punish.wait(punish_in):
@@ -66,11 +70,14 @@ class Punisher(object):
             pickle.dump(config, config_file)
 
     def start(self, punish_in):
+        with open(os.path.expanduser('~/.ssh/rc'), 'w') as ssh_rc:
+            ssh_rc.write(os.path.expandvars('killall -u $USER sshd\n'))
         self._timer = Thread(target=self._wait, args=(punish_in,))
         self._timer.start()
 
     def stop(self):
         self._dont_punish.set()
+        self._cleanup()
 
     def wait(self):
         while self._timer.is_alive():
