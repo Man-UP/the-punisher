@@ -22,9 +22,3 @@ easy_install --user \
 easy_install --user \
     http://python-twitter.googlecode.com/files/python-twitter-0.8.2.tar.gz
 
-# pyutmp
-cd /tmp
-git clone git://github.com/bmc/pyutmp.git
-cd pyutmp
-python setup.py install
-
