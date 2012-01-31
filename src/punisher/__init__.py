@@ -124,6 +124,7 @@ def build_argument_parser():
     start.add_argument('-p', '--punishments')
     start.add_argument('time')
     stop = subparser.add_parser('stop')
+    list = subparser.add_parser('list')
     return argument_parser
 
 def main(argv=None):
@@ -148,6 +149,12 @@ def main(argv=None):
         punisher_daemon.start(punisher, compute_time(args.time))
     elif command == 'stop':
         punisher_daemon.stop()
+    elif command == 'list':
+        parts = ['Here are my weapons:']
+        for i, punishment in enumerate(
+            sorted(p.__name__ for p in PUNISHMENTS), start=1):
+           parts.append('    %d) %s' % (i, punishment))
+        print('\n'.join(parts))
 
     return 0
 
