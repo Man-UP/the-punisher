@@ -25,6 +25,7 @@ class Punishment(object):
 # ==============================================================================
 from punisher.punishments.olive import DeleteHomeDirPunishment
 from punisher.punishments.olive import HurtfulTwitterPost
+from punisher.punishments.olive import OffensiveEmail
 from punisher.punishments.olive import TestPunishment
 # ==============================================================================
 

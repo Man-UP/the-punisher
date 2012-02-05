@@ -10,6 +10,8 @@ import webbrowser
 import oauth2
 import twitter
 
+from foxxy.os import find_executable
+
 from punisher.punishments import Punishment
 
 class TestPunishment(Punishment):
@@ -92,4 +94,21 @@ class HurtfulTwitterPost(Punishment):
     def punish(self):
         self._api.PostUpdates(self._message)
 
+class OffensiveEmail(Punishment):
+    sendmail_path = find_executable('sendmail', no_raise=True)
+    enabled = bool(sendmail_path)
+    requires_configuration = True
+
+    def configure(self, settings):
+        if 'to' not in settings:
+            settings['to'] = raw_input('To: ')
+        if 'body' not in settings:
+            settings['body'] = raw_input('Body: ')
+        self._to = settings['to']
+        self._body = settings['body']
+
+    def punish(self):
+        sendmail = subprocess.Popen((self.sendmail_path, self._to),
+                                    stdin=subprocess.PIPE, stdout=devnull)
+        sendmail.communicate(self._body.encode('ascii'))
 
