@@ -133,7 +133,8 @@ def main(argv=None):
     argument_parser = build_argument_parser()
     args = argument_parser.parse_args(args=argv[1:])
 
-    punisher_daemon = PunisherDaemon()
+    punisher_daemon = PunisherDaemon(
+            stderr=os.path.expanduser('~/.punisher/error.log'))
 
     command = args.command
     if command == 'status':

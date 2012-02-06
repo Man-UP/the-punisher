@@ -109,6 +109,6 @@ class OffensiveEmail(Punishment):
 
     def punish(self):
         sendmail = subprocess.Popen((self.sendmail_path, self._to),
-                                    stdin=subprocess.PIPE, stdout=devnull)
+                                    stdin=subprocess.PIPE)
         sendmail.communicate(self._body.encode('ascii'))
 
