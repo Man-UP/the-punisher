@@ -96,7 +96,7 @@ class _StartFrame(tk.Frame, object):
     def _validate(self):
         time_text = self._time_var.get().strip()
         try:
-            punish_time = datetime.datetime.strptime(time_text, '%H:%M')
+            punish_time = datetime.datetime.strptime(time_text, '%H:%M:%S')
         except ValueError:
             new_state = tk.DISABLED
         else:
@@ -233,8 +233,10 @@ class PunisherGUI(tk.Tk, object):
         super(PunisherGUI, self).destroy()
 
 
-def mainloop():
+def mainloop(time=None):
     tk.NoDefaultRoot()
     punisher_gui = PunisherGUI()
+    if time is not None:
+        punisher_gui._frame._time_var.set(time)
     punisher_gui.mainloop()
 
