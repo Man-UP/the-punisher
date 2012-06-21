@@ -8,5 +8,5 @@ cd -- "${REPO}"
 
 export PYTHONPATH='src/'
 
-python2 src/punisher/gui.py "${@}"
+python2 -m punisher "${@}"
 

@@ -12,7 +12,9 @@ import threading
 from punisher.punishments import PUNISHMENTS, safety
 import punisher.utils
 
-SETTINGS_DIR_PATH = punisher.utils.abspath(__file__, 'settings')
+SETTINGS_DIR_PATH = os.path.expanduser('~/.punisher')
+if not os.path.isdir(SETTINGS_DIR_PATH):
+    os.makedirs(SETTINGS_DIR_PATH)
 
 class PunisherError(Exception):
     pass
@@ -27,23 +29,23 @@ class User(object):
 
     def settings_new(self):
         self.settings = {}
-        
+
     def settings_load(self):
         with open(self._settings_path) as settings_file:
             self.settings = cPickle.load(settings_file)
 
     def settings_save(self):
         with open(self._settings_path, 'w') as settings_file:
-            cPickle.dump(self.settings, settings_file) 
+            cPickle.dump(self.settings, settings_file)
 
     def settings_delete(self):
         os.remove(self._settings_path)
-    
+
 
 class Punisher(object):
     safe_mode = True
-    
-    def __init__(self, user, punishments=None):        
+
+    def __init__(self, user, punishments=None):
         if isinstance(user, str):
             self.user = User(user)
             try:
@@ -57,13 +59,13 @@ class Punisher(object):
 
         if punishments is None:
             punishments = PUNISHMENTS
-        
+
         self._punishments = set()
         for punishment_class in punishments:
             punishment = punishment_class(self)
             if punishment.requires_configuration:
-                fullname = '%s.%s' % (punishment_class.__module__, 
-                    punishment_class.__name__)                
+                fullname = '%s.%s' % (punishment_class.__module__,
+                    punishment_class.__name__)
                 if fullname not in self.user.settings:
                     self.user.settings[fullname] = {}
                 punishment.configure(self.user.settings[fullname])
@@ -73,7 +75,7 @@ class Punisher(object):
         if not self._punishments:
             raise PunisherError('no punishments')
         print('Punishments loaded: %s' % ' '.join(map(str, self._punishments)))
-    
+
     def activate(self, punish_datetime, password):
         self._password = password
         self.punish_datetime = punish_datetime
@@ -82,20 +84,20 @@ class Punisher(object):
             / 10**6
         self._timer = threading.Timer(seconds, self.punish)
         self._timer.start()
-    
+
     def deactivate(self, password):
         if password != self._password:
             raise PunisherError('password incorrect')
         self._timer.cancel()
-        
+
     def punish(self):
         punishment = random.choice(self._punishments)
         if self.safe_mode:
             print('Safe mode is suppressing %s punishment' % punishment)
         else:
             punishment.punish()
-        
-        
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv
